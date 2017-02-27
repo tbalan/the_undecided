@@ -1,0 +1,446 @@
+---
+title: "The undecided"
+author: "Theodor Balan"
+date: "24 Aug 2016"
+output:
+  html_document: 
+    keep_md: true
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Context
+
+In December 2016, parliamentary elections took place in Romania. A small grass-root party, Union Save Romania (USR) runs for elections for the first time, after a moderate success in running at the previous local elections in Bucharest earlier in 2016.
+With a very short time to develop and limited resources for the campaign, the question is on which places in the country to focus on.
+
+In December 2014, presidential elections took place in Romania. The leading goverment party at the time (PSD, social-democrats) was running with Mr. Ponta while the main opposition force (PNL, center-right liberal) was proposing Mr. Johannis. 
+Mr. Ponta was clearly the favorite, enjoying a large support especially in rural and poor communities, and a much better organized campaign, with strong tendencies towards populism and nationalism. Mr. Johannis did not have a comparable image or support, but was widely respected for his tenure as a mayor in the city of Sibiu. Before the first round, Mr. Johannis had a rather weak media presence, and Mr. Ponta won by a landslide. Not enough to secure 50% of the votes, though.
+
+In the first round, from around 9.67 mil votes, Mr. Ponta secured 3.93 mil (40.7%) while Mr. Johannis only 2.93 mil (30.2%). 
+In the second round, a much higher turnout (11.78 mil), Mr Ponta had secured 5.39 mil (45.8%) and Mr. Johannis a whopping 6.38 mil (54.2%). 
+
+There are several possible reasons why this has happened. Between the two rounds, Mr. Ponta mismanaged a scandal regarding the limitation of voting rights of Romanians living abroad, and Mr. Johannis' media presence improved. The public outrage against Mr. Ponta seems to have been the cause. The increase in the number of voters suggest that indeed, most new voters voted against Mr. Ponta. The highest increase in voting numbers was in urban centers and abroad, places which traditionally have a low-turnout and an aversion towards the PSD. 
+
+```{r load_dat1, echo=FALSE, warning=FALSE, message=FALSE}
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(purrr)
+library(ggthemes)
+# Acesta e un set de date CU diaspora
+load("dat_tidy.Rdata")
+```
+
+```{r rez2, echo=FALSE}
+dat_tidy %>% 
+  group_by(tur) %>% 
+  summarize_at(vars(inscrisi:vadim), sum) %>% 
+  gather(candidat, voturi, amaritei:vadim) %>% 
+  gather(variable, value, voturi, inscrisi, valabile, nule, altasectie, anulate, speciala, primite,prezenticopii, prezenti) %>% 
+  unite(var, variable, tur) %>% 
+  spread(var, value) %>% 
+  select(candidat, voturi_tur1, voturi_tur2) %>%
+  mutate(proc_tur1 = round((voturi_tur1 / sum(voturi_tur1) )* 100, digits = 2),
+         proc_tur2 = round((voturi_tur2 / sum(voturi_tur2, na.rm = T)) * 100, digits = 2)) %>% 
+  select(candidat, voturi_tur1, proc_tur1, voturi_tur2, proc_tur2) %>% 
+  rbind(., data.frame(candidat="TOTAL", voturi_tur1=sum(.$voturi_tur1, na.rm=T), proc_tur1 = sum(.$proc_tur1),
+                      voturi_tur2 = sum(.$voturi_tur2, na.rm = T), proc_tur2 = sum(.$proc_tur2, na.rm = T)))
+```
+I call these people the *undecided*. They don't usually bother voting, but when they feel outraged they do so, even if it is to vote what they perceive as the lesser evil. 
+USR appeals to these people. The party has a clear anti-PSD position and its members were not politicians previously. The question is: where are they?
+
+## Assumptions
+Mr. Johannis raised an extra 3.4 mil votes in the second round, while Mr. Ponta raised only 1.3 mil votes, as compared to the first round. The following statements are plausible:
+  - Both candidates attracted other voters from the first round. For example, Mr. Tariceanu gave his support to Mr. Ponta. Mr. Diaconescu, a populist, had a similar appeal as Mr. Mr. Johannis atracted the voters of Mrs. Macovei, running on an anti-corruption platform, possibly some from Mrs. Udrea, an anti-PSD candidate. An ethnic minoritarian himsel, Johannis probably captured the votes of the hungarian minority as well.
+  - Generally, I can assume that, more or less, the majority of the voters from the first round also casted a vote in the second round. 
+  - The new voters casted their votes, very likely, to Mr. Johannis
+
+Where are the *undecided*?
+
+## Cateva figuri
+Here I look at counties to see the evolution of the two candidates between the two rounds. Left it Mr. Johannis and right is Mr. Ponta, both showing the number of votes in the second round vs the number of votes in the first round. Mr. Johannis seems to have fared better in the second round, especially among the romanians outside romania, and in the counties of Cluj and Timis. Mr. Ponta has seem a rather modest increase in every county.   
+```{r plots1, echo=FALSE, message=FALSE, warning=FALSE}
+djudet <- dat_tidy %>% 
+  group_by(tur, judet) %>% 
+  summarize_at(vars(inscrisi:vadim), sum) %>% 
+  gather(variable, value, valabile, amaritei:vadim) %>% 
+  select(-(inscrisi:prezenti)) %>% 
+  filter(variable %in% c("valabile", "iohannis", "ponta")) %>% 
+  unite(var,variable, tur) %>% 
+  spread(var, value) %>% 
+  mutate(diff_vot = valabile_tur2 - valabile_tur1,
+         diff_proc_vot = valabile_tur2 / valabile_tur1 -1,
+         diff_ioh = iohannis_tur2 - iohannis_tur1,
+         diff_proc_ioh = iohannis_tur2 / iohannis_tur1 - 1,
+         diff_pon = ponta_tur2 - ponta_tur1,
+         diff_proc_pon = ponta_tur2 / ponta_tur1 - 1) 
+  
+library(ggplot2)
+library(ggthemes)
+library(gridExtra)
+
+pl1 <- djudet %>% ggplot(aes(iohannis_tur1, iohannis_tur2)) + geom_text(aes(label = judet)) + 
+  geom_abline() +   theme_fivethirtyeight() + scale_colour_fivethirtyeight() + 
+  ggtitle("Iohannis tur2 vs tur1") + ylim(c(0, 350000))
+
+pl2 <- djudet %>% ggplot(aes(ponta_tur1, ponta_tur2)) + geom_text(aes(label = judet)) + 
+  geom_abline() +   theme_fivethirtyeight() + scale_colour_fivethirtyeight() + 
+  ggtitle("Ponta tur2 vs tur1") + ylim(c(0, 350000))
+
+grid.arrange(pl1, pl2, nrow = 1)
+```
+
+Here I look at the growth of each of the candidates vs the total growth in number of voters. 
+This shows that Mr. Johannis' growth was above the total growth in each county, while Mr. Ponta's growth was below the number of new voters. 
+```{r plots2, message = FALSE, echo=FALSE, warning = FALSE}
+
+pl1_b <- djudet %>% ggplot(aes(diff_vot, diff_ioh)) + geom_text(aes(label = judet)) + 
+  geom_abline() +   theme_fivethirtyeight() + scale_colour_fivethirtyeight() + 
+  ggtitle("growth Joh vs total") + ylim(c(0, 300000))
+
+pl2_b <- djudet %>% ggplot(aes(diff_vot, diff_pon)) + geom_text(aes(label = judet)) + 
+  geom_abline() +   theme_fivethirtyeight() + scale_colour_fivethirtyeight() + 
+  ggtitle("growth Pon vs total") + ylim(c(0, 300000))
+grid.arrange(pl1_b, pl2_b, nrow = 1)
+# aici se vede ca cresterea lui iohannis a fost mai mare decat cresterea totala in fecare judet, in timp ce crestrea lui
+# ponta a fost mai mica decat crestrea de voturi. 
+```
+
+## Selectarea datelor
+
+In 488 polling statiosn there were less voters in round 2 than in round 1. The larger decreases were seen in some towns from Harghita and Covasna (hungarian-majority regions), although overall the counties themselves enjoyed a growth in voters as well. 
+```{r nr_votanti, echo=FALSE, warning=FALSE, message=FALSE}
+library(ggplot2)
+dat_tidy  %>% 
+  select(judet, localitate, tur, valabile) %>% 
+  group_by(tur) %>% 
+  mutate(sectie_id = 1:n()) %>% 
+  spread(tur, valabile) %>% 
+  ggplot(aes(x = tur1, y = tur2)) + geom_point() + geom_abline(colour = "red") +  theme_fivethirtyeight() + scale_colour_fivethirtyeight()
+
+dat_tidy  %>% 
+  select(judet, localitate, tur, valabile) %>% 
+  group_by(tur) %>% 
+  mutate(sectie_id = 1:n()) %>% 
+  spread(tur, valabile) %>%  
+  mutate(diff = tur2 - tur1) %>% 
+  filter(diff < 0) %>% 
+  arrange(diff)
+# 
+# dat_tidy  %>% 
+#   select(judet, localitate, tur, valabile) %>% 
+#   group_by(tur) %>% 
+#   mutate(sectie_id = 1:n()) %>% 
+#   spread(tur, valabile) %>%  
+#   group_by(judet, localitate) %>% 
+#   summarize_at(vars(tur1:tur2), sum) %>% 
+#   mutate(diff = tur2 - tur1) %>% 
+#   filter(diff < 0) %>% 
+#   arrange(desc(tur1)) 
+# 
+# dat_tidy  %>% 
+#   select(judet, localitate, tur, valabile) %>% 
+#   group_by(tur) %>% 
+#   mutate(sectie_id = 1:n()) %>% 
+#   spread(tur, valabile) %>%  
+#   group_by(judet, localitate) %>% 
+#   summarize_at(vars(tur1:tur2), sum) %>% 
+#   mutate(diff = tur2 - tur1) %>% 
+#   filter(diff < 0) %>% 
+#   arrange(desc(tur1)) %>% 
+#   summarize_at(vars(tur1:diff), sum) %>% 
+#   arrange(diff)
+# 
+# dat_tidy  %>% 
+#   select(judet, localitate, tur, valabile) %>% 
+#   group_by(tur) %>% 
+#   mutate(sectie_id = 1:n()) %>% 
+#   spread(tur, valabile) %>%  
+#   group_by(judet) %>% 
+#   summarize_at(vars(tur1:tur2), sum) %>% 
+#   mutate(diff = tur2 - tur1) %>% 
+#   filter(diff < 0) 
+```
+Aggregating the votes on towns, in 88 towns there were less voters in the second round as compared to the first.
+
+```{r inca, echo=FALSE, warning=FALSE, message=FALSE}
+dat_tidy  %>%
+  select(judet, localitate, tur, valabile) %>%
+  group_by(tur) %>%
+  mutate(sectie_id = 1:n()) %>%
+  spread(tur, valabile) %>%
+  group_by(judet, localitate) %>%
+  summarize_at(vars(tur1:tur2), sum) %>%
+  mutate(diff = tur2 - tur1) %>%
+  filter(diff < 0) %>%
+  arrange(desc(tur1))
+
+currr <- dat_tidy  %>%
+  group_by(judet, localitate) %>% 
+  nest() %>% 
+  mutate(oras_id = 1:n()) %>% 
+  unnest() %>% 
+  ungroup() %>% 
+  select(judet, localitate, oras_id, tur, valabile) %>%
+  group_by(tur) %>%
+  mutate(sectie_id = 1:n()) %>%
+  spread(tur, valabile) %>%
+  group_by(judet, localitate, oras_id) %>%
+  summarize_at(vars(tur1:tur2), sum) %>%
+  mutate(diff = tur2 - tur1) %>%
+  filter(diff < 0) %>%
+  arrange(desc(tur1))
+
+
+# Fucking save them somehow PLEASE
+```
+I exclude these from the analysis. 
+
+## The model
+I am modeling the following scenario: a number of people vote in round 1 for their favourite candidates. In round 2, they also show up, plus a number of new voters. The new voters may come from the PSD-dominated regions (to vote pro-Ponta) or the **undecided**. If a person voted in round 1, then in round 2 they voted for one of the two candidates.
+
+Assume that the growth of Mr. Johannis' votes is described by 
+$$
+\mathrm{iohannis}_\mathrm{tur2} - \mathrm{iohannis}_\mathrm{tur1} = 
+\beta_1 \times ( \mathrm{total}_\mathrm{tur2} - \mathrm{total}_\mathrm{tur2}) + 
+\beta_2 \times \mathrm{amaritei}_\mathrm{tur1} + \beta_3 \times \mathrm{branza}_\mathrm{tur1} + ... + \varepsilon
+$$
+with unknowns $\beta_i$, restricted on $0 \leq \beta_i \leq 1$. 
+The interpretation is that the extra votes of mr. Johannis in round 2 consists of a proportion of the new votes plus a sum of proportions of votes of other candidates from round 1. A large $\beta_1$ is consistent in this case with a large number of **undecided**. For $\beta_1 = 0.7$ it would mean that Mr. Johannis attracted 70% of the extra voters from round 2.
+
+I use quadratic programming to estimate the $\beta$:
+```{r tara, echo = FALSE,  message = FALSE}
+library(quadprog)
+library(tidyr)
+library(purrr)
+
+#currr$oras_id
+
+dat_tidy3 <- dat_tidy %>% 
+  group_by(judet, localitate) %>% 
+  nest() %>% 
+  mutate(oras_id = 1:n()) %>% 
+  unnest() %>% 
+  ungroup() %>% 
+  filter(!(oras_id %in%currr$oras_id))
+
+# data frame cu tur 1 vs tur 2 pe 3 categorii, pe sectie
+dat_all <- dat_tidy3 %>% 
+  mutate_at(vars(valabile:vadim), funs(ifelse(is.na(.), 0, .))) %>% 
+  group_by(tur) %>% 
+  mutate(id = 1:n()) %>% 
+  select(-nule, -altasectie, -anulate, -speciala, -primite, -prezenticopii, - prezenti, -inscrisi) %>% 
+  gather(variable, number, valabile:vadim) %>% 
+  unite(var, tur, variable) %>% 
+  spread(var, number) %>% 
+  select(-(tur2_amaritei:tur2_funar), -(tur2_kelemen:tur2_melescanu), -(tur2_rotaru:tur2_vadim)) %>% 
+  mutate(incr_iohannis = tur2_iohannis - tur1_iohannis,
+         incr_ponta = tur2_ponta - tur1_ponta,
+         incr = tur2_valabile - tur1_valabile) 
+Y <- dat_all$incr_iohannis %>% as.matrix()
+X <- dat_all %>% select(incr, tur1_amaritei, tur1_branza, tur1_diaconescu, tur1_funar, tur1_kelemen,
+                          tur1_macovei, tur1_melescanu, tur1_ponta, tur1_rotaru, 
+                          tur1_szilagy, tur1_tariceanu, tur1_udrea, tur1_vadim) %>% as.matrix()
+
+
+Dmat <- t(X) %*% X
+d <- t(Y) %*% X
+#Amat <- cbind(rep(1,14), diag(14), diag(14))
+Amat <- cbind(diag(14), -diag(14))
+
+#b <- c(1, rep(0,14))
+b <- c(rep(0, 14), rep(-1, 14))
+
+qpsol <- solve.QP(Dmat = Dmat, 
+                  dvec = d, 
+                  Amat = Amat,
+                  bvec = b, 
+                  meq = 0)
+res_tara <- data.frame(dimnames(X)[[2]], qpsol$solution)  %>% 
+  arrange(desc(qpsol.solution))
+names(res_tara) = c("variabila", "beta")
+res_tara %>% arrange(variabila) %>% 
+  mutate(beta = round(beta, digits = 2))
+
+```
+According to this estimateion, Mr. Johannis attracted around 96% of the new voters from round 2 at a national level. Also, a large proportion of the votes of Branza, Kelemen, Macovei, Melescanu, Szilagy, Udrea. 
+(and 100% of Funar's votes, an extreme-right candidate, difficult to believe. I will return to this.)
+
+Then I do the same thing for each county.
+```{r judet, echo = FALSE, message=FALSE, warning=FALSE}
+X <- NULL
+Y <- NULL
+
+res_tmp <- dat_all %>% 
+  group_by(judet) %>% 
+  nest() %>% 
+  mutate(Y = map(data, ~as.matrix(select(., incr_iohannis)))) %>% 
+  mutate(X = map(data, ~as.matrix(select(., incr, tur1_amaritei, tur1_branza, tur1_diaconescu, tur1_funar, tur1_kelemen,
+                                         tur1_macovei, tur1_melescanu, tur1_ponta, tur1_rotaru, 
+                                         tur1_szilagy, tur1_tariceanu, tur1_udrea, tur1_vadim)))) %>%
+  mutate(qp = map2(.x = X, .y = Y,  
+                  .f = ~solve.QP(Dmat = t(.x) %*% .x, dvec = t(.y) %*% .x, 
+                                 Amat = cbind(diag(14), -diag(14)),  bvec = c(rep(0, 14), rep(-1, 14))
+                                 )
+                  )
+         ) %>% 
+  mutate(qp_sol = map(.x = qp, .f = ~.$solution)) %>% 
+  mutate(names = map(.x = X, .f = ~colnames(.))) %>% 
+  mutate(voturi_noi = map_dbl(.x = data, .f = ~sum(.$incr))) %>% 
+  select(-data, -Y, -X, -qp) %>% 
+  unnest() %>% 
+  spread(names, qp_sol) %>% 
+  arrange(desc(incr)) 
+
+dat_judete <- res_tmp %>% 
+  mutate(nemultumiti_per = incr) %>% 
+  mutate(nemultumiti_nr = incr * voturi_noi) %>% 
+  select(-voturi_noi) %>% 
+  select(judet, nemultumiti_per, nemultumiti_nr, tur1_amaritei:tur1_vadim)
+
+
+write.csv2(dat_judete, file = "rez_judete.csv")
+
+res_multimod_judet <- res_tmp %>% 
+  select(-tur1_amaritei, -tur1_branza, -tur1_funar, -tur1_diaconescu, -tur1_rotaru, -tur1_szilagy) %>% 
+  arrange(incr) 
+
+res_multimod_judet
+
+# In ce judete s-a luat mult din voturile noi? ce e peste linia 0.5
+library(plotly)
+ggplotly(res_multimod_judet %>% 
+  ggplot(aes(voturi_noi, incr)) + geom_text(aes(label = judet, colour = incr)))
+  
+```
+
+The interpretaton here depends on the height of each county in the plot. According to the model, in Cluj, strainatate (outside Romania), Harghita, Covasna, Mr. Johannis attracted over 90% of the new votes. A good result was also observed in Salaj, Alba, Satu Mare, Sibiu, Hunedoara, Mure, all counties in Transilvanya (where Mr. Johannis is most well-known). 
+Places where Mr. Johannis only had a few of the new votes are Teleorman, Botosani, Buzau, Dambovita, Iasi, Vrancea, Mehedinti, Dolj, Gorj, etc. All of these are places where PSD has a very strong presence.
+
+```{r altele, echo = FALSE}
+# ggplotly(res_multimod_judet %>% 
+#   ggplot(aes(voturi_noi, tur1_ponta)) + geom_text(aes(label = judet, colour = incr)))
+```
+Then I repeat the same on the larger citites. Places where Mr. Johannis attracted a large proportion of the new votes:
+```{r pressure, echo=FALSE}
+solve_qp <- safely(solve.QP)
+
+cc<- dat_all %>% group_by(judet, localitate) %>%  
+  nest() %>% 
+  mutate(Y = map(data, ~as.matrix(select(., incr_iohannis)))) %>% 
+  mutate(X = map(data, ~as.matrix(select(., incr, tur1_amaritei, tur1_branza, tur1_diaconescu, tur1_funar, tur1_kelemen,
+                                         tur1_macovei, tur1_melescanu, tur1_ponta, tur1_rotaru, 
+                                         tur1_szilagy, tur1_tariceanu, tur1_udrea, tur1_vadim)))) %>%
+  mutate(qp = map2(.x = X, .y = Y,  
+                   .f = ~solve_qp(Dmat = t(.x) %*% .x, dvec = t(.y) %*% .x, 
+                                  Amat = cbind(diag(14), -diag(14)),  bvec = c(rep(0, 14), rep(-1, 14))
+                   )
+  )) %>% 
+  mutate(is_good = map_lgl(.x = qp, .f = ~is.null(.x$error))) %>% 
+  filter(is_good == TRUE)
+
+pl_orase <- cc %>% 
+  mutate(qp = map(.x = qp, .f = ~.[[1]])) %>% 
+  mutate(qp_sol = map(.x = qp, .f = ~.$solution)) %>% 
+  mutate(names = map(.x = X, .f = ~colnames(.))) %>% 
+  mutate(voturi_noi = map_dbl(.x = data, .f = ~sum(.$incr))) %>% 
+  select(-data, -Y, -X, -qp) %>% 
+  unnest() %>% 
+  spread(names, qp_sol) %>% 
+  arrange(desc(incr)) %>% 
+  mutate(nemultumiti = incr*voturi_noi) %>% 
+  arrange(desc(nemultumiti)) %>% 
+  select(-tur1_amaritei, -tur1_branza, -tur1_funar, -tur1_diaconescu, -tur1_rotaru, -tur1_szilagy) %>% 
+  arrange(incr) %>% 
+  ggplot(aes(x = voturi_noi, y = incr, text = localitate)) + 
+  geom_point(aes(colour = judet, size = nemultumiti)) 
+
+cc %>% 
+  mutate(qp = map(.x = qp, .f = ~.[[1]])) %>% 
+  mutate(qp_sol = map(.x = qp, .f = ~.$solution)) %>% 
+  mutate(names = map(.x = X, .f = ~colnames(.))) %>% 
+  mutate(voturi_noi = map_dbl(.x = data, .f = ~sum(.$incr))) %>% 
+  select(-data, -Y, -X, -qp) %>% 
+  unnest() %>% 
+  spread(names, qp_sol) %>% 
+  arrange(desc(incr)) %>% 
+  select(-tur1_amaritei, -tur1_branza, -tur1_funar, -tur1_diaconescu, -tur1_rotaru, -tur1_szilagy) %>% 
+  arrange(desc(incr)) %>% 
+  filter(judet != "strainatate") %>% 
+  filter(judet != "harghita") %>% 
+  filter(judet != "covasna") %>% 
+  select(judet, localitate, voturi_noi, incr) %>% 
+  mutate(nemultumiti = incr*voturi_noi) %>% 
+  arrange(desc(nemultumiti))
+  
+
+
+```
+
+And cities where he failed to do so:
+```{r, echo=FALSE}
+cc2 <- cc %>% 
+  mutate(qp = map(.x = qp, .f = ~.[[1]])) %>% 
+  mutate(qp_sol = map(.x = qp, .f = ~.$solution)) %>% 
+  mutate(names = map(.x = X, .f = ~colnames(.))) %>% 
+  mutate(voturi_noi = map_dbl(.x = data, .f = ~sum(.$incr))) %>% 
+  select(-data, -Y, -X, -qp) %>% 
+  unnest() %>% 
+  spread(names, qp_sol) %>% 
+  arrange(desc(incr)) %>% 
+  select(-tur1_amaritei, -tur1_branza, -tur1_funar, -tur1_diaconescu, -tur1_rotaru, -tur1_szilagy) %>% 
+  arrange(incr) %>% 
+  filter(judet != "strainatate") %>% 
+  filter(judet != "harghita") %>% 
+  filter(judet != "covasna") %>% 
+  select(judet, localitate, voturi_noi, incr) 
+
+cc2 %>% 
+  mutate(nemultumiti = incr*voturi_noi) %>% 
+  arrange(nemultumiti)
+
+
+dat_orase <- cc %>% 
+  mutate(qp = map(.x = qp, .f = ~.[[1]])) %>% 
+  mutate(qp_sol = map(.x = qp, .f = ~.$solution)) %>% 
+  mutate(names = map(.x = X, .f = ~colnames(.))) %>% 
+  mutate(voturi_noi = map_dbl(.x = data, .f = ~sum(.$incr))) %>% 
+  select(-data, -Y, -X, -qp, -is_good) %>% 
+  unnest() %>% 
+  spread(names, qp_sol) %>% 
+  arrange(desc(incr)) %>% 
+  mutate(nemultumiti_per = incr) %>% 
+  mutate(nemultumiti_nr = incr * voturi_noi) %>% 
+  select(-voturi_noi) %>% 
+  select(judet, localitate, nemultumiti_per, nemultumiti_nr, tur1_amaritei:tur1_vadim)
+
+
+write.csv2(dat_orase, file = "rez_orase.csv")
+
+
+
+```
+
+This shows how Mr. Johannis performed much better in large urban centers, and quite poorly in small towns. 
+Now all in a plot, in which the size of the circle is proportional to the number of **undecided** and the height represented the *percentage* of **undecided**. The horizontal position is the number of new votes in the town.
+
+```{r, echo = FALSE}
+
+library(plotly)
+ggplotly(pl_orase)
+```
+All can be found in `rez_orase.csv`. 
+
+
+
+## Conclusion
+There are cities where people came out to cast their vote in the second round, especially to vote against Mr. Ponta. These people can turn the election result around. 
+
+A problem remains with interpreting percentages of candidates that are small in certain places (ex. Kelemen almost only had votes in the hungarian-dominated part of the country) or candidates whose supporters might not have voted in the second round (e.g. Funar or Vadim, extreme right). It is highly unlikely that Funar's voters turned to Mr. Johannis. What might have happened is that his voters did not show up, but more new voters replaced them, and they voted for Mr. Johannis. This might lead to the underestimation of the percentage of **undecided** ($\beta_1$). However, this probably holds only for candidates with very few votes that are not interesting to study. 
+
+Written in August 2016, translated in February 2017
